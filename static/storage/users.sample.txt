@@ -1,0 +1,2 @@
+slackUserId,Name,should_follow
+
