@@ -53,6 +53,50 @@ pub async fn get_chat_history(
     Ok(body)
 }
 
+pub async fn get_chat_reply(
+    history_options: ChatHistoryOptions,
+) -> Result<MessageResponse, QueryError> {
+    let client = reqwest::Client::new();
+
+    let mut headers = reqwest::header::HeaderMap::new();
+    let auth_token = std::env::var("SLACK_TOKEN").unwrap();
+    headers.insert(
+        reqwest::header::AUTHORIZATION,
+        format!("Bearer {}", auth_token).parse().unwrap(),
+    );
+    headers.insert(
+        reqwest::header::CONTENT_TYPE,
+        "application/json; charset=utf-8".parse().unwrap(),
+    );
+
+    let slack_url = format!(
+        "https://slack.com/api/{}?{}",
+        "conversations.history",
+        history_options.to_query_one_args()
+    );
+
+    let res = client.get(slack_url).headers(headers).send().await;
+    let response;
+    if let Ok(rexponse) = res {
+        response = rexponse.json::<MessageResponse>().await;
+    } else {
+        println!("Ohh noo {:?}", res);
+        return Err(QueryError::new(""));
+    }
+
+    let body_r = response;
+    let body;
+    if let Ok(bodyx) = body_r {
+        // println!("casual body {:?}", bodyx);
+        body = bodyx;
+    } else {
+        println!("Ohh body {:?}", body_r);
+        return Err(QueryError::new(""));
+    }
+
+    Ok(body)
+}
+
 #[cfg(test)]
 mod test {
     use super::get_chat_history;

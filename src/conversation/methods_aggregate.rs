@@ -1,4 +1,7 @@
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{
+    fmt::format,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 pub enum METHOD {
     /// The chat history
@@ -38,12 +41,17 @@ pub struct ChatHistoryOptions {
     next_page: Option<String>,
     // Messages after the given timestap
     messages_since: Option<u64>,
+
+    // Message id. Often ts
+    message_id: Option<String>,
+    // Channel id
+    channel_id: Option<String>,
 }
 
 impl Default for ChatHistoryOptions {
     fn default() -> Self {
         let messages_since = match SystemTime::now().duration_since(UNIX_EPOCH) {
-            Ok(n) => Some(n.as_secs() - 3000),
+            Ok(n) => Some(n.as_secs() - 300),
             Err(_) => None,
         };
 
@@ -51,6 +59,8 @@ impl Default for ChatHistoryOptions {
             limit: 10,
             next_page: None,
             messages_since,
+            message_id: None,
+            channel_id: None,
         }
     }
 }
@@ -66,5 +76,22 @@ impl ChatHistoryOptions {
         }
 
         query_resp
+    }
+    pub fn to_query_one_args(&self) -> String {
+        let mut query_resp = format!("limit{}&inclusive=true", self.limit);
+        if let Some(query) = &self.message_id {
+            query_resp.push_str(format!("&oldest={}", query).as_str());
+        }
+
+        query_resp
+    }
+
+    pub fn only_one(&mut self) {
+        self.limit = 1;
+    }
+
+    pub fn set_message_thread(&mut self, channel_id: &str, message_id: &str) {
+        self.channel_id = Some(channel_id.into());
+        self.message_id = Some(message_id.into());
     }
 }

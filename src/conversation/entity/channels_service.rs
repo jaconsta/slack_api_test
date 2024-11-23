@@ -110,6 +110,32 @@ impl Channel {
             .collect();
         return Ok(messages);
     }
+
+    pub async fn load_replies(
+        channel_id: &str,
+        message_id: &str,
+    ) -> Result<Vec<Message>, SlackChannelError> {
+        let history_options = ChatHistoryOptions::default();
+        history_options.set_message_thread(channel_id, message_id);
+        history_options.only_one();
+        let chats = get_chat_reply(history_options).await;
+        if let Err(err) = chats {
+            return Err(SlackChannelError::new(&err.to_string()));
+        }
+
+        let chat_details = chats.unwrap().messages;
+        if let None = chat_details {
+            return Ok(vec![]);
+        }
+
+        let messages: Vec<Message> = chat_details
+            .unwrap()
+            .iter()
+            .filter(|f| f.is_elegible())
+            .map(|f| f.into())
+            .collect();
+        return Ok(messages);
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -126,6 +152,8 @@ pub struct Reply {
 pub struct Message {
     // Content text
     pub message: String,
+    // Unique id of the channel, normally starts with C / D
+    pub channel_id: Option<String>,
     // ts in seconds when the message arrived
     pub received_at: usize,
     // Required for further conversation.replies query
@@ -171,6 +199,7 @@ impl Message {
             received_ts,
             reply,
             sender,
+            channel_id: None,
         }
     }
 
@@ -221,5 +250,201 @@ impl Message {
         users.dedup();
 
         users
+    }
+
+    pub fn set_channel_id(&mut self, channel_id: &str) {
+        self.channel_id = Some(channel_id.into());
+    }
+    pub fn bubble_sort<const M: usize>(messages: &mut Box<[Option<Message>; M]>) {
+        for i in 0..messages.len() {
+            for j in i..messages.len() - i - 1 {
+                // Expect no elements to the left
+                let msg_0 = match &messages[j] {
+                    Some(msg) => msg.clone(),
+                    None => continue,
+                };
+                let msg_1 = match &messages[j + 1] {
+                    Some(msg) => msg.clone(),
+                    None => continue,
+                };
+                // Get the reply times
+                let reply_0 = match &msg_0.reply {
+                    Some(r) => r.latest_reply,
+                    None => 0,
+                };
+                let reply_1 = match &msg_1.reply {
+                    Some(r) => r.latest_reply,
+                    None => 0,
+                };
+
+                if msg_0.received_at < msg_1.received_at || reply_0 < reply_1 {
+                    messages.swap(j + 1, j);
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    #[test]
+    fn bubblesorting() {
+        let unsorted_3 = [Some(Message {
+            channel_id: None,
+            message: "into".into(),
+            received_at: 10000,
+            received_ts: "10000.000".into(),
+            reply: None,
+            sender: "U001".into(),
+        })];
+        let mut messages = Box::new(unsorted_3);
+        Message::bubble_sort(&mut messages);
+        assert_eq!(messages[0].clone().unwrap().received_ts, "10000.000");
+    }
+
+    #[test]
+    fn bubblesorting2() {
+        let unsorted_3 = [
+            Some(Message {
+                channel_id: None,
+                message: "into".into(),
+                received_at: 1_000,
+                received_ts: "1000.000".into(),
+                reply: None,
+                sender: "U001".into(),
+            }),
+            Some(Message {
+                channel_id: None,
+                message: "into".into(),
+                received_at: 10_000,
+                received_ts: "10000.000".into(),
+                reply: None,
+                sender: "U001".into(),
+            }),
+        ];
+        let mut messages = Box::new(unsorted_3);
+        Message::bubble_sort(&mut messages);
+        assert_eq!(messages[0].clone().unwrap().received_ts, "10000.000");
+
+        println!("bubblesorting 2 done");
+    }
+
+    #[test]
+    fn bubblesorting3() {
+        let unsorted_3 = [
+            Some(Message {
+                channel_id: None,
+                message: "into".into(),
+                received_at: 100_000,
+                received_ts: "100000.000".into(),
+                reply: None,
+                sender: "U001".into(),
+            }),
+            Some(Message {
+                channel_id: None,
+                message: "into".into(),
+                received_at: 1_000,
+                received_ts: "1000.000".into(),
+                reply: None,
+                sender: "U001".into(),
+            }),
+            Some(Message {
+                channel_id: None,
+                message: "into".into(),
+                received_at: 10_000,
+                received_ts: "10000.000".into(),
+                reply: None,
+                sender: "U001".into(),
+            }),
+        ];
+        let mut messages = Box::new(unsorted_3);
+        Message::bubble_sort(&mut messages);
+        assert_eq!(messages[0].clone().unwrap().received_ts, "10000.000");
+
+        println!("bubblesorting 3 done");
+    }
+
+    #[test]
+    fn bubblesorting2_and_none() {
+        let unsorted_3 = [
+            Some(Message {
+                channel_id: None,
+                message: "into".into(),
+                received_at: 100_000,
+                received_ts: "100000.000".into(),
+                reply: None,
+                sender: "U001".into(),
+            }),
+            Some(Message {
+                channel_id: None,
+                message: "into".into(),
+                received_at: 1_000,
+                received_ts: "1000.000".into(),
+                reply: None,
+                sender: "U001".into(),
+            }),
+            None,
+        ];
+        let mut messages = Box::new(unsorted_3);
+        Message::bubble_sort(&mut messages);
+        assert_eq!(messages[0].clone().unwrap().received_ts, "100000.000");
+
+        println!("bubblesorting 2 and none . 3 done");
+    }
+
+    #[test]
+    fn bubblesorting_none_and_1() {
+        let unsorted_3 = [
+            None,
+            Some(Message {
+                channel_id: None,
+                message: "into".into(),
+                received_at: 1_000,
+                received_ts: "1000.000".into(),
+                reply: None,
+                sender: "U001".into(),
+            }),
+            None,
+        ];
+        let mut messages = Box::new(unsorted_3);
+        Message::bubble_sort(&mut messages);
+        assert_eq!(messages[0].is_none(), true);
+        assert_eq!(messages[1].clone().unwrap().received_ts, "1000.000");
+
+        println!("bubblesorting none and 1 . 2 done");
+    }
+
+    #[test]
+    fn bubblesorting1_1reply() {
+        let unsorted_3 = [
+            Some(Message {
+                channel_id: None,
+                message: "into".into(),
+                received_at: 1_000,
+                received_ts: "1000.000".into(),
+                reply: None,
+                sender: "U001".into(),
+            }),
+            Some(Message {
+                channel_id: None,
+                message: "into".into(),
+                received_at: 100,
+                received_ts: "100.000".into(),
+                reply: Some(Reply {
+                    latest_reply: 1_000_000,
+                    latest_ts: "1000000".into(),
+                    users: Vec::new(),
+                }),
+                sender: "U001".into(),
+            }),
+        ];
+        let mut messages = Box::new(unsorted_3);
+        Message::bubble_sort(&mut messages);
+        assert_eq!(messages[0].clone().unwrap().received_ts, "100.000");
+
+        println!("bubblesorting1_1reply done");
     }
 }
