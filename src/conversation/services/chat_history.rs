@@ -10,9 +10,6 @@ pub async fn get_chat_history(
 ) -> Result<MessageResponse, QueryError> {
     let client = reqwest::Client::new();
     let slack_method = get_method(METHOD::ConversationHistory);
-    if slack_method.action.eq("post") {
-        return Err(QueryError::new("Slack action method, should be POST"));
-    }
 
     let mut headers = reqwest::header::HeaderMap::new();
     let auth_token = std::env::var("SLACK_TOKEN").unwrap();
@@ -43,7 +40,6 @@ pub async fn get_chat_history(
     let body_r = response;
     let body;
     if let Ok(bodyx) = body_r {
-        // println!("casual body {:?}", bodyx);
         body = bodyx;
     } else {
         println!("Ohh body {:?}", body_r);
@@ -71,7 +67,7 @@ pub async fn get_chat_reply(
 
     let slack_url = format!(
         "https://slack.com/api/{}?{}",
-        "conversations.history",
+        get_method(METHOD::ConversationHistory).action,
         history_options.to_query_one_args()
     );
 
@@ -87,7 +83,6 @@ pub async fn get_chat_reply(
     let body_r = response;
     let body;
     if let Ok(bodyx) = body_r {
-        // println!("casual body {:?}", bodyx);
         body = bodyx;
     } else {
         println!("Ohh body {:?}", body_r);

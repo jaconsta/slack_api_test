@@ -1,8 +1,6 @@
-use std::{
-    fmt::format,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::time::{SystemTime, UNIX_EPOCH};
 
+#[allow(dead_code)]
 pub enum METHOD {
     /// The chat history
     /// Fetches a conversation's history of messages and events.
@@ -12,6 +10,10 @@ pub enum METHOD {
     /// Lists all channels in a Slack team.
     /// https://api.slack.com/methods/conversations.list
     Channels,
+    /// Chat replies
+    /// Retrieve a thread of messages posted to a conversation
+    /// https://api.slack.com/methods/conversations.replies
+    Replies,
 }
 
 pub struct ApiMethod {
@@ -25,11 +27,11 @@ fn new_api_method(action: String, method: String) -> ApiMethod {
 
 // Get the API method to perform a certain operation.
 pub fn get_method(m: METHOD) -> ApiMethod {
-    let post = String::from("post");
     let get = String::from("get");
     match m {
-        METHOD::ConversationHistory => new_api_method(String::from("conversations.history"), post),
+        METHOD::ConversationHistory => new_api_method(String::from("conversations.history"), get),
         METHOD::Channels => new_api_method(String::from("conversations.list"), get),
+        METHOD::Replies => new_api_method(String::from("conversations.replies"), get),
     }
 }
 
@@ -78,7 +80,10 @@ impl ChatHistoryOptions {
         query_resp
     }
     pub fn to_query_one_args(&self) -> String {
-        let mut query_resp = format!("limit{}&inclusive=true", self.limit);
+        let mut query_resp = format!("limit={}&inclusive=true", self.limit);
+        if let Some(query) = &self.channel_id {
+            query_resp.push_str(format!("&channel={}", query).as_str());
+        }
         if let Some(query) = &self.message_id {
             query_resp.push_str(format!("&oldest={}", query).as_str());
         }

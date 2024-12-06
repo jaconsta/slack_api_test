@@ -1,15 +1,14 @@
 use std::thread;
 
-use crate::conversation::{
-    channels_str::ConversationChannel,
-    errors_str::SlackChannelError,
-    messages_str::MessageNormal,
-    methods_aggregate::ChatHistoryOptions,
-    services::{
-        channels_cache_fs::{create_cache, read_cache, ChannelStorage},
-        chat_channels::get_conversation_channels,
-        chat_history::get_chat_history,
-    },
+use crate::conversation::channels_str::ConversationChannel;
+use crate::conversation::errors_str::SlackChannelError;
+use crate::conversation::messages_str::MessageNormal;
+use crate::conversation::methods_aggregate::ChatHistoryOptions;
+use crate::conversation::services::chat_history::get_chat_reply;
+use crate::conversation::services::{
+    channels_cache_fs::{create_cache, read_cache, ChannelStorage},
+    chat_channels::get_conversation_channels,
+    chat_history::get_chat_history,
 };
 
 #[derive(Debug, Clone)]
@@ -114,8 +113,8 @@ impl Channel {
     pub async fn load_replies(
         channel_id: &str,
         message_id: &str,
-    ) -> Result<Vec<Message>, SlackChannelError> {
-        let history_options = ChatHistoryOptions::default();
+    ) -> Result<Option<Message>, SlackChannelError> {
+        let mut history_options = ChatHistoryOptions::default();
         history_options.set_message_thread(channel_id, message_id);
         history_options.only_one();
         let chats = get_chat_reply(history_options).await;
@@ -123,17 +122,26 @@ impl Channel {
             return Err(SlackChannelError::new(&err.to_string()));
         }
 
-        let chat_details = chats.unwrap().messages;
+        let chats = chats.unwrap();
+        let chat_details = chats.messages;
         if let None = chat_details {
-            return Ok(vec![]);
+            println!("No new messages");
+            return Ok(None); // ((vec![]);
         }
 
-        let messages: Vec<Message> = chat_details
+        println!(
+            "Last message for channelId: {} message ts: {} is at {}.",
+            channel_id,
+            message_id,
+            chats.oldest.unwrap_or("no_oldest".to_string()),
+        );
+        let messages: Option<Message> = chat_details
             .unwrap()
             .iter()
             .filter(|f| f.is_elegible())
             .map(|f| f.into())
-            .collect();
+            .next();
+
         return Ok(messages);
     }
 }
@@ -166,19 +174,19 @@ pub struct Message {
 
 impl From<&MessageNormal> for Message {
     fn from(mn: &MessageNormal) -> Self {
-        let mut reply: Option<Reply> = None;
-        if let Some(latest_reply) = &mn.latest_reply {
-            reply = Some(Reply {
-                latest_reply: Message::parse_ts(latest_reply.clone()),
+        let reply: Option<Reply> = match &mn.latest_reply {
+            Some(latest_reply) => Some(Reply {
+                latest_reply: Message::parse_ts(&latest_reply),
                 latest_ts: latest_reply.clone(),
                 users: mn.reply_users.clone().unwrap_or(Vec::new()),
-            });
-        }
+            }),
+            _ => None,
+        };
 
         return Message::new(
             mn.text.clone(),
             mn.user.as_ref().unwrap_or(&String::from("")).into(),
-            Message::parse_ts(mn.ts.clone()),
+            Message::parse_ts(&mn.ts),
             mn.ts.clone(),
             reply,
         );
@@ -203,7 +211,8 @@ impl Message {
         }
     }
 
-    pub fn parse_ts(ts: String) -> usize {
+    // Gets the ts value in seconds
+    pub fn parse_ts(ts: &str) -> usize {
         let in_seconds = ts
             .split(".")
             .take(1)

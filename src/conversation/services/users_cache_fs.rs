@@ -5,7 +5,7 @@ use std::{
 
 use crate::conversation::{entity::users::User, errors_str::FileSystemError};
 
-static FILE_PATH: &'static str = "static/storage";
+// static FILE_PATH: &'static str = "static/storage";
 static FILE_NAME: &'static str = "static/storage/users_cache.txt";
 
 pub fn read_cache() -> Result<Vec<User>, FileSystemError> {
@@ -27,7 +27,7 @@ pub fn read_cache() -> Result<Vec<User>, FileSystemError> {
         let l = line.unwrap();
 
         let user_line: Vec<&str> = l.split(",").collect();
-        if user_line.is_empty() || !user_line[0].starts_with("C") {
+        if user_line.is_empty() || !user_line[0].starts_with("U") {
             continue;
         }
         let user = User::new(user_line[0], user_line[1], user_line[2] == "true");

@@ -87,6 +87,8 @@ pub struct MessageResponse {
     pub ok: bool,
     pub messages: Option<Vec<MessageNormal>>,
     pub latest: Option<String>,
+    // The oldest message included in the response
+    pub oldest: Option<String>,
 
     pub has_more: Option<bool>,
     pub pin_count: Option<usize>,

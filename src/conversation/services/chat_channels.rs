@@ -10,9 +10,6 @@ pub async fn get_conversation_channels(
     let client = reqwest::Client::new();
 
     let slack_method = get_method(METHOD::Channels);
-    if !slack_method.method.eq("get") {
-        return Err(QueryError::new("Slack action method, should be GET"));
-    }
 
     let mut headers = reqwest::header::HeaderMap::new();
     let auth_token = std::env::var("SLACK_TOKEN").unwrap();
